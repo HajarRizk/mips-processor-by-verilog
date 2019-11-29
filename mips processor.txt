@@ -1,0 +1,346 @@
+module clock(clk);
+output reg clk;
+initial
+clk=0;
+always
+#31.25 clk=~clk;
+endmodule
+
+module SIGNEXTEND(in,out);
+input[15:0] in;
+output [31:0] out;
+assign out={{16{in[15]}},in[15:0]};
+endmodule
+
+module PC(out,inn,Clk,Reset);
+output reg [31:0] out;
+input [31:0] inn;
+input Clk;
+input  Reset;
+always @(posedge Clk)
+begin
+if(Reset==1'b1)
+begin
+out<=32'b0000_0000_0000_0000_0000_0000_0000_0000;
+end
+else
+begin
+out<=inn;
+end
+end
+endmodule
+
+module mux_5(int1,int2,out,set);
+output reg [4:0]out;
+input [4:0] int1;
+input  [4:0] int2;
+input set;
+always @(int1,int2,set)
+begin
+case (set)
+0:out<=int1;
+1:out<=int2;
+default:out<=5'bxxxxx;
+endcase
+end
+endmodule
+
+
+
+module MUX(z,x,y,set);
+output reg [31:0]z;
+input [31:0] x;
+input  [31:0] y;
+input set;
+always @(x,y,set)
+begin
+case (set)
+0:z<=x;
+1:z<=y;
+default:z<=32'bxxxx_xxxx_xxxx_xxxx_xxxx_xxxx_xxxx_xxxx;
+endcase
+end
+endmodule
+
+module ADDER(int1,int2,out);
+output [31:0] out;
+input [31:0] int1,int2;
+assign out=int1+int2;
+endmodule
+
+
+
+
+
+module instruction_memory (pc,instruction);
+input [31:0] pc;
+output reg[31:0] instruction ;
+reg [31:0]IRM[0:8191];
+initial
+begin
+$readmemb ("D:\project/mips.txt", IRM);
+end
+always @(pc,IRM[pc])
+begin
+instruction <= IRM[pc];
+end
+
+endmodule
+
+
+module dataMemory(clk,ReadData,Address,WriteData,MemWrite,MemRead);
+input clk;
+input[12:0]Address;
+input[31:0]WriteData;//input data
+output[31:0]ReadData;// output data
+input MemWrite;//enable write
+input MemRead;//enable read
+integer j;
+integer i;
+integer file;
+reg [31:0] data_mem[0:8191];
+initial
+begin
+for (j=0;j<8192;j=j+1)
+data_mem[j]=j;
+end
+initial
+ begin
+  file = $fopen("D:\co/DMEM.txt"); //datamemory file
+  $fmonitor(file, "%d ", data_mem[i]);
+   #600 //delay after all the program is finished
+  for (i=0;i<8192;i=i+1)
+   begin
+
+      #1
+     i=i;
+   end
+
+  #200
+  $fclose(file);
+ 
+end
+assign ReadData=(MemRead==1'b1)?data_mem[Address]:32'bxxxx_xxxx_xxxx_xxxx_xxxx_xxxx_xxxx_xxxx;
+always @(posedge clk)
+begin
+if(MemWrite)
+data_mem[Address]<=WriteData;
+end
+
+ 
+
+endmodule
+
+module ALU(in1, in2 ,shamt, alucontrol , out1 ,zeroflag);
+input wire[31:0] in1;
+input wire[31:0] in2;
+input wire [4:0] shamt;
+input wire[3:0] alucontrol;
+output reg[31:0] out1;
+wire[31:0]a;
+output zeroflag ;
+assign zeroflag=(out1==0)?1'b1:1'b0;
+assign a=in1-in2;
+always@(in1 , in2 , alucontrol,a[31] ,shamt)
+
+begin
+case(alucontrol)
+4'b0010:out1<=in1 + in2;
+4'b0110: out1<= in1- in2;
+4'b0111:out1<={{31{1'b0}},a[31]};
+4'b0001:out1<=in1 | in2;
+4'b0000:out1<=in1&in2;
+4'b1100:out1<=~(in1|in2);
+4'b1001:out1<=in2<<shamt;
+4'b1111:out1<=in2>>shamt;
+default :out1<=0;
+endcase
+end
+
+endmodule
+
+
+
+module alu_ctl(func,alu_op,alucontrol);
+input wire[5:0] func;
+input wire [1:0] alu_op;
+output wire [3:0] alucontrol;
+assign alucontrol=
+((alu_op==2'b00)||(alu_op==2'b10&&func==6'b100000))?(4'b0010)
+:((alu_op==2'b01)||(alu_op==2'b10&&func==6'b100010))?(4'b0110)
+:(alu_op==2'b10&&func==6'b100100)?(4'b0000)
+:((alu_op==2'b10&&func==6'b100101)||(alu_op==2'b11))?(4'b0001)
+:(alu_op==2'b10&&func==6'b101010)?(4'b0111)
+:(alu_op==2'b10&&func==6'b100111)?(4'b1100)
+:(alu_op==2'b10&&func==6'b000000)?(4'b1001)
+:(alu_op==2'b10&&func==6'b000010)?(4'b1111)
+:4'bxxxx;
+
+endmodule
+
+module registerfile(read1,read2,writeregister,writedata,rgwrite,data1,data2,clk);
+input [4:0] read1,read2,writeregister;
+input [31:0] writedata;
+input clk,rgwrite;
+output [31:0] data1 ,data2;
+reg[31:0]RF[0:31];
+integer i;
+integer j;
+integer f;
+assign data1=RF[read1];
+assign data2=RF[read2];
+initial
+begin
+for (i=0;i<32;i=i+1)
+RF[i]=i;
+end
+
+initial
+ begin
+  f = $fopen("D:\co/RF.txt");  //RF file
+  $fmonitor(f, "%d ", RF[j]);
+   #600    //delay after all the program is finished
+  for (j=0;j<32;j=j+1)
+   begin
+
+      #1
+     j=j;
+   end
+
+  #200
+  $fclose(f);
+ 
+end
+always @(posedge clk)
+begin
+if (rgwrite==1&&writeregister!=5'b00000)
+RF[writeregister]<=writedata;
+else
+RF[writeregister]<=RF[writeregister];
+end
+endmodule
+
+module Control (OpCode,fn, RegDst, Branch, MemRead, MemToReg, ALUOp, MemWrite, ALUSrc, RegWrite, Jump,jr,jal);
+output reg RegDst, Jump, Branch, MemRead, MemToReg, MemWrite, ALUSrc, RegWrite,jr,jal;
+output reg [1:0]ALUOp;
+input [5:0] OpCode;
+input [5:0] fn;
+always @ (OpCode,fn)
+case (OpCode)
+0 :
+ //R format
+begin
+if(fn==8) //jr
+begin
+jr<=1'b1;RegDst<=1'bx; ALUSrc<=1'bx; MemToReg<=1'bx; RegWrite<=0;
+MemRead<=1'b0; MemWrite<=0; Branch<=1'bx; Jump<=1'bx;
+ALUOp<=2'bxx; jal<=1'bx;
+end
+else
+begin
+jr<=1'b0;RegDst<=1; ALUSrc<=0; MemToReg<=0; RegWrite<=1;
+MemRead<=1'b0; MemWrite<=0; Branch<=0; Jump<=0;
+ALUOp<=2'b10; jal<=1'b0;
+end
+end
+43://sw
+begin
+RegDst<=1'bx; ALUSrc<=1; MemToReg<=1'bx; RegWrite<=0;
+MemRead<=0; MemWrite<=1; Branch<=0; Jump<=0;
+ALUOp <= 2'b00;jr<=1'b0;jal<=1'bx;
+end
+35://lw
+begin
+RegDst<=0; ALUSrc<=1; MemToReg<=1; RegWrite<=1;
+MemRead<=1; MemWrite<=0; Branch<=0; Jump<=0;
+ALUOp <= 2'b00;jr<=1'b0;jal<=1'b0;
+end
+4: //beq
+begin
+RegDst<=1'bx; ALUSrc<=0; MemToReg<=1'bx; RegWrite<=0;
+MemRead<=0; MemWrite<=0; Branch<=1; Jump<=0;
+ALUOp<= 2'b01;jr<=1'b0;jal<=1'bx;
+end
+2: // j
+begin
+RegDst<=1'bx; ALUSrc<=1'bx; MemToReg<=1'bx; RegWrite<=0;
+MemRead<=0; MemWrite<=0; Branch<=0; Jump<=1;
+ALUOp <=2'bxx;jr<=1'b0;jal<=1'bx;
+end
+3: // jal
+begin
+RegDst<=1'bx; ALUSrc<=1'bx; MemToReg<=1'bx; RegWrite<=1;
+MemRead<=0; MemWrite<=0; Branch<=0; Jump<=1;
+ALUOp<=2'bxx;jr<=1'b0;jal<=1'b1;
+end
+8: // addi
+begin
+RegDst<=0; ALUSrc<=1; MemToReg<=0; RegWrite<=1;
+MemRead<=0; MemWrite<=0; Branch<=0; Jump<=0;
+ALUOp<=2'b00;jr<=1'b0;jal<=1'b0;
+end
+13: //ori
+begin
+RegDst<=0; ALUSrc<=1; MemToReg<=0; RegWrite<=1;
+MemRead<=0; MemWrite<=0; Branch<=0; Jump<=0;
+ALUOp <=2'b11;jr<=1'b0;jal<=1'b0;
+end
+default:
+begin
+RegDst<=0; ALUSrc<=0; MemToReg<=0; RegWrite<=0;
+MemRead<=0; MemWrite<=0; Branch<=0; Jump<=0;
+ALUOp <=2'b00;jr<=1'b0;jal<=1'b0;
+end
+endcase
+endmodule
+module mips_processor(
+    input clk,
+    input reset
+    //output wire[31:0] outt
+    );
+wire [31:0] out,data1,data2,alu2,outSE,out1,ReadData,writedata_1,writedata_2,add1O,add2O,mux1,mux2,mux3;
+wire [4:0] writeregister,writeregister1 ;
+wire [3:0] alucontrol;
+wire RegDst, Branch, MemRead, MemToReg, MemWrite, ALUSrc,jr, RegWrite, Jump,jal;
+wire [1:0] ALUOp;
+wire sel1,zeroflag;
+wire[31:0] instruction;
+PC p(out,mux3,clk,reset);
+instruction_memory IM(out>>2,instruction);
+
+Control ctl(instruction[31:26],instruction[5:0], RegDst, Branch, MemRead, MemToReg, ALUOp, MemWrite, ALUSrc, RegWrite, Jump,jr,jal);
+registerfile rf(instruction[25:21],instruction[20:16],writeregister,writedata_2,RegWrite,data1,data2,clk);
+mux_5 regDst(instruction[20:16],instruction[15:11],writeregister1,RegDst);
+mux_5 jal_1(writeregister1,5'b11111,writeregister,jal);
+ALU alu(data1, alu2 ,instruction[10:6], alucontrol , out1 ,zeroflag);
+//assign outt=out1;
+SIGNEXTEND SE(instruction[15:0],outSE);
+MUX aluSrc(alu2,data2,outSE,ALUSrc);
+alu_ctl ALUCtl(instruction[5:0],ALUOp,alucontrol);
+dataMemory DM(clk,ReadData,out1[12:0],data2,MemWrite,MemRead);
+MUX memtoReg(writedata_1,out1,ReadData,MemToReg);
+MUX jal_2(writedata_2,writedata_1,add1O,jal);
+assign sel1=zeroflag&Branch;
+ADDER adder1(out,4,add1O);
+ADDER adder2(add1O,outSE<<2,add2O);
+MUX mux_1(mux1,add1O,add2O,sel1);
+MUX mux_2(mux2,mux1,{add1O[31:28],{instruction[25:0],2'b00}},Jump);
+MUX mux_3(mux3,mux2,data1,jr);
+
+endmodule
+
+module tb_mips();
+wire clk;
+reg reset;
+
+clock c(clk);
+
+mips_processor mp(clk,reset);
+initial
+begin
+reset=1;
+repeat(2)@(negedge clk);
+reset=0;
+end
+
+endmodule
